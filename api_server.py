@@ -42,6 +42,34 @@ logging.basicConfig(level=logging.INFO,
                                        format='[%(levelname)s]  %(asctime)s - %(message)s',
                                        )
 
+
+# ============================================================
+# LED Strip(s)
+
+# Set pwm range from 0 to 255
+# Zero if full on 255 is full off
+pwm_range = 255
+
+leds = {}
+
+leds['tim'] = led_strip(2, 3, 4, pwm_range)
+leds['sharon'] = led_strip(17, 27, 22, pwm_range)
+
+# Target time range to go from current levels to full on
+time_to_full = 600
+
+
+# ============================================================
+# PIgpio
+pi = pigpio.pi()
+
+
+# Connect the buttons
+# pi.callback(14, pigpio.RISING_EDGE, pigpio_callback)
+# pi.callback(15, pigpio.RISING_EDGE, pigpio_callback)
+# pi.callback(18, pigpio.RISING_EDGE, pigpio_callback)
+
+
 # ============================================================
 # Set up scheduler
 
@@ -69,21 +97,62 @@ def root():
 
 @app.route("/on")
 def on():
+    for led in leds:
+        leds[led].on()
     return "Turn the lights on\n"
 
 
 @app.route("/off")
 def off():
+    for led in leds:
+        leds[led].off()
     return "Turn the lights off\n"
 
 
 @app.route("/rgb")
 def rgb():
+    if request.args.get('red'):
+        red_in = request.args.get('red')
+    else:
+        red_in = None
+
+    if request.args.get('blue'):
+        blue_in = request.args.get('blue')
+    else:
+        blue_in = None
+
+    if request.args.get('green'):
+        green_in = request.args.get('green')
+    else:
+        green_in = None
+
+    for led in leds:
+        if red_in is None:
+            red = leds[led].get_red()
+        else: 
+            red = red_in
+
+        if blue_in is None:
+            blue = leds[led].get_blue()
+        else: 
+            blue = blue_in
+
+        if green_in is None:
+            green = leds[led].get_green()
+        else: 
+            green = green_in
+
+        print("red: {}  green: {}  blue: {}".format(red, green, blue))
+
+        leds[led].set(red, blue, green)
     return "Set the lights color\n"
 
 
 @app.route("/sunrise")
 def sunrise():
+    for led in leds:
+        logging.info(f'Starting sunrise on [{led}]')
+        leds[led].background_sunrise(time_to_full)
     return "Start the sunrise scheme\n"
 
 
@@ -97,7 +166,7 @@ def schedule():
         return json.dumps(ret)
 
     elif request.method == 'POST':
-        job = scheduler.add_job(tick, 'interval', seconds=30)
+        job = scheduler.add_job(tick, 'interval', seconds=3600)
         temp_job = { 'id': job.id, 'name': job.name }
         return json.dumps(temp_job)
 
@@ -133,6 +202,44 @@ def tick():
 
 def noop():
     return True
+
+# ============================================================
+# LED control functions
+def sunrise(leds, duration=600):
+    for key in leds:
+        logging.info(f'Starting sunrise on [{key}]')
+        leds[key].background_sunrise(duration)
+
+
+def pigpio_callback(gpio, level, tick):
+    logging.debug(f'callback {gpio} : {level} : {tick}')
+
+    if "ticks" not in pigpio_callback.__dict__:
+        pigpio_callback.ticks = {}
+
+    if gpio not in pigpio_callback.ticks:
+        pigpio_callback.ticks[gpio] = 0
+
+    #if not hasattr(pigpio_callback.ticks, f'{gpio}'):
+    #    pigpio_callback.ticks[f'{gpio}'] = 0
+
+    if tick > (pigpio_callback.ticks[gpio] + 500000):
+        old = pigpio_callback.ticks[gpio]
+        logging.debug(f'OLD: {old}  NEW:{tick}')
+        pigpio_callback.ticks[gpio] = tick
+
+        if gpio == 14:
+            logging.debug('Sunrise Requested')
+            sunrise(leds)
+        elif gpio == 15:
+            logging.debug('Red Requested')
+            for key in leds:
+                leds[key].red()
+        elif gpio == 18:
+            logging.debug('Red Requested')
+            for key in leds:
+                leds[key].toggle()
+
 
 # ============================================================
 # Create the scheduler. 

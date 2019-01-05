@@ -49,7 +49,7 @@ def main(argv):
 
     # LED Strip on Tim's side of the bed
     leds['tim'] = led_strip(2, 3, 4, pwm_range)
-    # leds['sharon'] = led_strip(17, 27, 22, pwm_range)
+    leds['sharon'] = led_strip(17, 27, 22, pwm_range)
 
 
     # Target time range to go from current levels to full on

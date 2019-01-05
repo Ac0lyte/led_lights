@@ -73,6 +73,15 @@ class led_strip:
     def get(self):
         return (self.pwm_red, self.pwm_green, self.pwm_blue)
 
+    def get_red(self):
+        return (self.pwm_red)
+
+    def get_green(self):
+        return (self.pwm_green)
+
+    def get_blue(self):
+        return (self.pwm_blue)
+
 
     def off(self):
         self.stop_sunrise()
@@ -145,6 +154,7 @@ class led_strip:
         sleep = ((duration * step_adjustment) / (pwm_range * 3))
 
         sleep = sleep / 5
+        logging.info("Sunrise - red dawn")
         for red in range(red, 0, -1):
             green = math.ceil(pwm_range - ((pwm_range - red) / 16))
             blue = math.ceil(pwm_range - ((pwm_range - green) / 15))
@@ -152,6 +162,7 @@ class led_strip:
             time.sleep(sleep)
 
         sleep = sleep * 5
+        logging.info("Sunrise - brighten")
         for green in range(green, 0, -1):
             blue = math.ceil(pwm_range - ((pwm_range - green) / 8))
             self.set(red, green, blue)
