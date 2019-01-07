@@ -5,9 +5,17 @@
 # Copyright © 2018 Tim Schaller <TimSchaller@gmail.com>
 #
 # Distributed under terms of the GPL2 license.
+#
+# TODO:
+# - define the LED stips (devices) in a config file
+#   right now everything is hardcoded.
+#
 
 """
 API server for led strip lights.
+
+This listens for API requests submitted over HTTP and interracts 
+with one or more LED devices using the led_strip module.
 """
 import sys
 
@@ -26,6 +34,7 @@ from datetime import datetime
 from multiprocessing import Process
 
 from flask import Flask
+from flask import jsonify
 from flask import request
 
 from pytz import utc
@@ -48,31 +57,32 @@ logging.basicConfig(level=logging.INFO,
 
 # Set pwm range from 0 to 255
 # Zero if full on 255 is full off
+# TODO: Load these from a config file
 pwm_range = 255
 
+# Define the LED devices
 leds = {}
 
+# TODO: Load these from a config file
 leds['tim'] = led_strip(2, 3, 4, pwm_range)
 leds['sharon'] = led_strip(17, 27, 22, pwm_range)
 
 # Target time range to go from current levels to full on
+# when running the sunrise process.
+# TODO: Load these from a config file
 time_to_full = 600
 
 
 # ============================================================
-# PIgpio
+# PiGpio : Connect to the pgpiod daemon. Currently on the same host
+# TODO: Allow multiple pigpio connections defined in a config file
 pi = pigpio.pi()
-
-
-# Connect the buttons
-# pi.callback(14, pigpio.RISING_EDGE, pigpio_callback)
-# pi.callback(15, pigpio.RISING_EDGE, pigpio_callback)
-# pi.callback(18, pigpio.RISING_EDGE, pigpio_callback)
 
 
 # ============================================================
 # Set up scheduler
-
+# Currently using SQLite on localhost.
+# Should I explore remote SQL servers? Overkill?
 jobstores = {
     'default': SQLAlchemyJobStore(url='sqlite:///jobs.sqlite')
 }
@@ -92,25 +102,86 @@ app = Flask(__name__)
 
 @app.route("/")
 def root():
+    """
+    The user reached root. This is a non used call.
+    """
     return "This is an api server.\n"
 
 
 @app.route("/on")
 def on():
+    """
+    Turn on all the LED devices
+    """
+
+    ret = {}
     for led in leds:
         leds[led].on()
-    return "Turn the lights on\n"
+        ret[led] = leds[led].get()
+    return jsonify(ret)
 
 
 @app.route("/off")
 def off():
+    """
+    Turn odd oll the LED devices
+    """
+
+    ret = {}
     for led in leds:
         leds[led].off()
-    return "Turn the lights off\n"
+        ret[led] = leds[led].get()
+    return jsonify(ret)
+
+
+@app.route("/state")
+def state():
+    """
+    Return the state of all devices
+    """
+
+    ret = {}
+    for led in leds:
+        ret[led] = leds[led].get()
+    return jsonify(ret)
+
+
+@app.route("/toggle")
+def toggle():
+    """
+    Toggle named/all LED devices between the current state and off
+    """
+
+    ret = {}
+    if request.args.get('led'):
+        led_in = request.args.get('led')
+        if leds[led_in]:
+            leds[led_in].toggle()
+    else:
+        led_sum = []
+        for led in leds:
+            led_sum.append(sum(leds[led].get()))
+       
+        for led in leds:
+            if min(led_sum) == max(led_sum) :
+                leds[led].toggle()
+            else:
+                leds[led].off()
+
+        ret[led] = leds[led].get()
+    return jsonify(ret)
 
 
 @app.route("/rgb")
 def rgb():
+    """
+    Set the LED devices to a specific color.
+
+    The color is defined by red, green, and blue values.
+    Use the current values for any colors not given.
+    """
+
+    ret = {}
     if request.args.get('red'):
         red_in = request.args.get('red')
     else:
@@ -145,15 +216,22 @@ def rgb():
         print("red: {}  green: {}  blue: {}".format(red, green, blue))
 
         leds[led].set(red, blue, green)
-    return "Set the lights color\n"
+        ret[led] = leds[led].get()
+    return jsonify(ret)
 
 
 @app.route("/sunrise")
 def sunrise():
+    """
+    Run the sunrise routine/action on all devices.
+    """
+
+    ret = {}
     for led in leds:
         logging.info(f'Starting sunrise on [{led}]')
         leds[led].background_sunrise(time_to_full)
-    return "Start the sunrise scheme\n"
+        ret[led] = leds[led].get()
+    return jsonify(ret)
 
 
 @app.route("/schedule", methods=['GET', 'POST', 'DELETE'])
@@ -166,7 +244,18 @@ def schedule():
         return json.dumps(ret)
 
     elif request.method == 'POST':
-        job = scheduler.add_job(tick, 'interval', seconds=3600)
+        action = request.values['action']
+        frequency = int(request.values['freq'])
+
+        if action == 'tick':
+            job = scheduler.add_job(tick, 'interval', seconds=frequency)
+        elif action == 'on':
+            job = scheduler.add_job(on, 'interval', seconds=frequency)
+        elif action == 'off':
+            job = scheduler.add_job(off, 'interval', seconds=frequency)
+        else:
+            return "I do not know how to do that.\n"
+
         temp_job = { 'id': job.id, 'name': job.name }
         return json.dumps(temp_job)
 
@@ -183,6 +272,10 @@ def schedule():
 
 @app.route("/schedule/<event_id>", methods=['GET', 'PUT', 'DELETE'])
 def schedules(event_id):
+    """
+    Interract with the scheduler.
+    """
+
     if request.method == 'GET':
         return f"GET event with id {event_id}\n"
     elif request.method == 'PUT':
@@ -198,47 +291,25 @@ def schedules(event_id):
 # Basic do nothing unit of work
 
 def tick():
-        print('Tick! The time is: %s' % datetime.now())
+    """
+    Print a message for the log
+    """
+
+    print('Tick! The time is: %s' % datetime.now())
 
 def noop():
+    """
+    Do nothing, return True
+    """
+
     return True
 
 # ============================================================
 # LED control functions
-def sunrise(leds, duration=600):
-    for key in leds:
-        logging.info(f'Starting sunrise on [{key}]')
-        leds[key].background_sunrise(duration)
-
-
-def pigpio_callback(gpio, level, tick):
-    logging.debug(f'callback {gpio} : {level} : {tick}')
-
-    if "ticks" not in pigpio_callback.__dict__:
-        pigpio_callback.ticks = {}
-
-    if gpio not in pigpio_callback.ticks:
-        pigpio_callback.ticks[gpio] = 0
-
-    #if not hasattr(pigpio_callback.ticks, f'{gpio}'):
-    #    pigpio_callback.ticks[f'{gpio}'] = 0
-
-    if tick > (pigpio_callback.ticks[gpio] + 500000):
-        old = pigpio_callback.ticks[gpio]
-        logging.debug(f'OLD: {old}  NEW:{tick}')
-        pigpio_callback.ticks[gpio] = tick
-
-        if gpio == 14:
-            logging.debug('Sunrise Requested')
-            sunrise(leds)
-        elif gpio == 15:
-            logging.debug('Red Requested')
-            for key in leds:
-                leds[key].red()
-        elif gpio == 18:
-            logging.debug('Red Requested')
-            for key in leds:
-                leds[key].toggle()
+#def sunrise(leds, duration=600):
+#    for key in leds:
+#        logging.info(f'Starting sunrise on [{key}]')
+#        leds[key].background_sunrise(duration)
 
 
 # ============================================================
@@ -253,20 +324,18 @@ def pigpio_callback(gpio, level, tick):
 #
  
 scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=utc)
-print()
+
+logging.info('')
 scheduler.add_job(noop)
-print('------------------------------------------------------------')
+
+logging.info('------------------------------------------------------------')
 
 scheduler.start()
 
-print('============================================================')
-print()
+logging.info('============================================================')
+logging.info('')
 
-# jobs = scheduler.get_jobs()
-# print('job list loaded')
-# if len(jobs) < 2:
-#     scheduler.add_job(tick, 'interval', seconds=30)
-#     print('Added a new job')
-# print('------------------------------------------------------------')
 
+if __name__ == "__main__":
+        app.run()
 

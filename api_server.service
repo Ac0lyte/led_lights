@@ -1,0 +1,17 @@
+[Unit]
+Description=api_server
+After=syslog.target
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/src/lights
+ExecStart=/home/pi/.pyenv/shims/python /home/pi/src/lights/api_server.py 
+
+# Give the script some time to startup
+TimeoutSec=300
+
+[Install]
+WantedBy=multi-user.target
