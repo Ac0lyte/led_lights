@@ -4,11 +4,16 @@ After=syslog.target
 After=network.target
 
 [Service]
-Type=simple
+Type=notify
+Restart=always
+KillSignal=SIGQUIT
+StandardError=syslog
+NotifyAccess=all
 User=pi
-Group=pi
+Group=www-data
 WorkingDirectory=/home/pi/src/lights
-ExecStart=/home/pi/.pyenv/shims/python /home/pi/src/lights/api_server.py 
+ExecStart=/home/pi/.pyenv/shims/uwsgi -s /tmp/api_server.sock --chmod-socket=664 --enable-threads --manage-script-name --mount /=api_server:app
+#ExecStart=/home/pi/.pyenv/shims/python /home/pi/src/lights/api_server.py 
 
 # Give the script some time to startup
 TimeoutSec=300

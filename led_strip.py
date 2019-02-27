@@ -99,24 +99,26 @@ class led_strip:
         # I know that this looks redundent ... basically it
         # sets any color to full on if it can not read it's value
         # from the pigpio daemon. This means that if the lights
-        # come on at boot there us an error using the pigpio
+        # come on at boot there is an error using the pigpio
         # This will become confusing with persistent state
+        #
+        # Update: Now they set themselved to off... 
         try:
             self.pwm_red = self.pi.get_PWM_dutycycle(self.red_pin)
         except:
-            self.pi.set_PWM_dutycycle(self.red_pin, 0)
+            self.pi.set_PWM_dutycycle(self.red_pin, pwm_range)
             self.pwm_red = self.pi.get_PWM_dutycycle(self.red_pin)
 
         try:
             self.pwm_green = self.pi.get_PWM_dutycycle(self.green_pin)
         except:
-            self.pi.set_PWM_dutycycle(self.green_pin, 0)
+            self.pi.set_PWM_dutycycle(self.green_pin, pwm_range)
             self.pwm_green = self.pi.get_PWM_dutycycle(self.green_pin)
 
         try:
             self.pwm_blue = self.pi.get_PWM_dutycycle(self.blue_pin)
         except:
-            self.pi.set_PWM_dutycycle(self.blue_pin, 0)
+            self.pi.set_PWM_dutycycle(self.blue_pin, pwm_range)
             self.pwm_blue = self.pi.get_PWM_dutycycle(self.blue_pin)
 
         # Get and return the current state in a standard format

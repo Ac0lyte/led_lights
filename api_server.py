@@ -239,13 +239,84 @@ def schedule():
     if request.method == 'GET':
         ret = []
         for job in scheduler.get_jobs():
-            temp_job = { 'id': job.id, 'name': job.name }
+            temp_job = { 'id': job.id, 'name': job.name, 'next_run': job.next_run_time }
+            trigger = {}
+            for f in job.trigger.fields:
+                curval = str(f)
+                trigger[f.name] = curval
+            temp_job['trigger'] = trigger
             ret.append(temp_job)
-        return json.dumps(ret)
+        return jsonify(ret)
 
     elif request.method == 'POST':
         action = request.values['action']
-        frequency = int(request.values['freq'])
+        if 'freq' in request.values:
+            frequency = int(request.values['freq'])
+
+        if 'id' in request.values:
+            job_id = request.values['id']
+        else:
+            job_id = request.values['action']
+
+        if 'tz' in request.values:
+            tz = request.values['tz']
+        else:
+            tz = 'America/Los_Angeles'
+
+        if 'year' in request.values:
+            year = request.values['year']
+        else:
+            year = None
+
+        if 'month' in request.values:
+            month = request.values['month']
+        else:
+            month = None
+
+        if 'day' in request.values:
+            day = request.values['day']
+        else:
+            day = None
+
+        if 'week' in request.values:
+            week = request.values['week']
+        else:
+            week = None
+
+        if 'day_of_week' in request.values:
+            day_of_week = request.values['day_of_week']
+        else:
+            day_of_week = None
+
+        if 'hour' in request.values:
+            hour = request.values['hour']
+        else:
+            hour = None
+
+        if 'minute' in request.values:
+            minute = request.values['minute']
+        else:
+            minute = None
+
+        if 'second' in request.values:
+            second = request.values['second']
+        else:
+            second = None
+
+        if 'start_date' in request.values:
+            start_date = request.values['start_date']
+        else:
+            start_date = None
+
+        if 'end_date' in request.values:
+            end_date = request.values['end_date']
+        else:
+            end_date = None
+
+        if 'jitter' in request.values:
+            jitter = request.values['jitter']
+        else:
+            jitter = None
 
         if action == 'tick':
             job = scheduler.add_job(tick, 'interval', seconds=frequency)
@@ -253,6 +324,8 @@ def schedule():
             job = scheduler.add_job(on, 'interval', seconds=frequency)
         elif action == 'off':
             job = scheduler.add_job(off, 'interval', seconds=frequency)
+        elif action == 'sunrise':
+            job = scheduler.add_job(sunrise, 'cron', year=year, month=month, day=day, day_of_week=day_of_week, hour=hour, minute=minute, second=second, start_date=start_date, end_date=end_date, timezone=tz , jitter=jitter, replace_existing=True, id=job_id)
         else:
             return "I do not know how to do that.\n"
 
@@ -277,6 +350,13 @@ def schedules(event_id):
     """
 
     if request.method == 'GET':
+        job = scheduler.get_jobs(event_id)
+        jobdict = {}
+        for f in job.trigger.fields:
+            curval = str(f)
+            jobdict[f.name] = curval
+
+        return jsonify(jobdict)
         return f"GET event with id {event_id}\n"
     elif request.method == 'PUT':
         return f"UPDATE event with id {event_id}\n"
@@ -323,7 +403,7 @@ def noop():
 # of this system.
 #
  
-scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone=utc)
+scheduler = BackgroundScheduler(jobstores=jobstores, executors=executors, job_defaults=job_defaults, timezone='America/Los_Angeles')
 
 logging.info('')
 scheduler.add_job(noop)
