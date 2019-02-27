@@ -37,6 +37,10 @@ from flask import Flask
 from flask import jsonify
 from flask import request
 
+from flask_swagger import swagger
+
+from flask_swagger_ui import get_swaggerui_blueprint
+
 from pytz import utc
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -100,18 +104,53 @@ job_defaults = {
 
 app = Flask(__name__)
 
+SWAGGER_URL = '/docs'
+API_URL = 'http://192.168.1.32:5000/spec'
+
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={
+        'app_name':"api_server",
+    },
+)
+
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
 @app.route("/")
 def root():
     """
-    The user reached root. This is a non used call.
+    Unused route. Return README
     """
-    return "This is an api server.\n"
+    return "This is an api server. Please check the <a href'/docs'>docs</a>."
+
+
+@app.route("/spec")
+def spec():
+    """
+    Get swagger spec
+    ---
+    tags:
+      - docs
+    summary: Return Swagger spec
+    responses:
+      200:
+        description: Spec returned
+    """
+    return jsonify(swagger(app))
 
 
 @app.route("/on")
 def on():
     """
-    Turn on all the LED devices
+    Turn lights on
+    ---
+    tags:
+      - controls
+    summary: Turn on all the LED devices
+    responses:
+      200:
+        description: All lights turned on
     """
 
     ret = {}
@@ -124,7 +163,14 @@ def on():
 @app.route("/off")
 def off():
     """
-    Turn odd oll the LED devices
+    Turn lights off
+    ---
+    tags:
+      - controls
+    summary: Turn off all the LED devices
+    responses:
+      200:
+        description: All lights turned off
     """
 
     ret = {}
@@ -137,7 +183,14 @@ def off():
 @app.route("/state")
 def state():
     """
-    Return the state of all devices
+    Get current light state
+    ---
+    tags:
+      - controls
+    summary: Return the state of all devices
+    responses:
+      200:
+        description: Return a JSON structure showing the current state of all the lights.
     """
 
     ret = {}
@@ -149,7 +202,14 @@ def state():
 @app.route("/toggle")
 def toggle():
     """
-    Toggle named/all LED devices between the current state and off
+    Toggle lights
+    ---
+    tags:
+      - controls
+    summary: Toggle all the lights
+    responses:
+      200:
+        description: Toggle named/all LED devices between the current state and off
     """
 
     ret = {}
@@ -175,10 +235,39 @@ def toggle():
 @app.route("/rgb")
 def rgb():
     """
-    Set the LED devices to a specific color.
-
-    The color is defined by red, green, and blue values.
-    Use the current values for any colors not given.
+    Set the LED devices to a specific color. The color is defined by red, green, and blue values. The valid range is from zero (full on) to 255 (off). Use the current values for any colors not given.
+    ---
+    tags:
+      - controls
+    parameters:
+      - in : query
+        name: red
+        description: red value from 0 to 255
+        required: false
+        type: integer
+        format: int32
+        maximum: 255
+        minimum: 0
+      - in : query
+        name: blue
+        description: blue value from 0 to 255
+        required: false
+        type: integer
+        format: int32
+        maximum: 255
+        minimum: 0
+      - in : query
+        name: green
+        description: green value from 0 to 255
+        required: false
+        type: integer
+        format: int32
+        maximum: 255
+        minimum: 0
+    summary: Set the LED devices to a specific color. The color is defined by red, green, and blue values. Use the current values for any colors not given. The valid range is from zero (full on) to 255 (off).
+    responses:
+      200:
+        description: Light color set
     """
 
     ret = {}
@@ -224,6 +313,13 @@ def rgb():
 def sunrise():
     """
     Run the sunrise routine/action on all devices.
+    ---
+    tags:
+      - controls
+    summary: 
+    responses:
+      200:
+        description: Sunrise started
     """
 
     ret = {}
@@ -236,6 +332,36 @@ def sunrise():
 
 @app.route("/schedule", methods=['GET', 'POST', 'DELETE'])
 def schedule():
+    """
+    Manage the schedule
+    ---
+    tags:
+      - schedule
+    get:
+      description: Return a JSON object containing all of the jobs.
+      summary: Return a JSON object containing all of the jobs.
+      tags:
+        - schedule
+      responses:
+        200:
+          description: Job list returned
+    POST:
+      description: Add a new job
+      summary: Add a new job
+      tags:
+        - schedule
+      responses:
+        200:
+          description: Job added
+    DELETE:
+      description: Remove all  jobs
+      summary: Remove a job
+      tags:
+        - schedule
+      responses:
+        200:
+          description: Jobs removed
+    """
     if request.method == 'GET':
         ret = []
         for job in scheduler.get_jobs():
@@ -346,7 +472,22 @@ def schedule():
 @app.route("/schedule/<event_id>", methods=['GET', 'PUT', 'DELETE'])
 def schedules(event_id):
     """
-    Interract with the scheduler.
+    Edit a scheduled job.
+    ---
+    tags:
+      - schedule
+    get:
+      responses:
+        200:
+          description: Job shown
+    update:
+      responses:
+        200:
+          description: Job updated
+    delete:
+      responses:
+        200:
+          description: Job removed
     """
 
     if request.method == 'GET':

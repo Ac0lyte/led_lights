@@ -8,6 +8,8 @@ db-sqlite3==0.0.1
 dbapi==0.0.13
 docutils==0.14
 Flask==1.0.2
+flask-swagger==0.2.13
+flask-swagger-ui=3.18.0
 idna==2.7
 itsdangerous==1.1.0
 Jinja2==2.10
